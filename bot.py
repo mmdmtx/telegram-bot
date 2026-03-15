@@ -46,7 +46,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         member = await context.bot.get_chat_member(MAIN_CHANNEL, user_id)
         if member.status in ["member", "administrator", "creator"]:
             if key and key in links:
-                await update.message.reply_text(f"بفرمایید، این هم لینک شما:\n\n{links[key]}")
+                # پیام موفقیت برای کاربرانی که از قبل عضو هستند
+                await update.message.reply_text(
+                    f"مرسی که کانال اصلی رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{links[key]}\n{links[key]}"
+                )
             else:
                 await update.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
             return 
@@ -70,7 +73,10 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if member.status in ["member", "administrator", "creator"]:
             key = context.user_data.get("key")
             if key and key in links:
-                await query.message.reply_text(f"بفرمایید، این هم لینک شما:\n\n{links[key]}")
+                # پیام موفقیت برای کاربرانی که تازه عضو شدند و دکمه چک رو زدند
+                await query.message.reply_text(
+                    f"مرسی که کانال اصلی رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{links[key]}\n{links[key]}"
+                )
             else:
                 await query.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
         else:
