@@ -22,7 +22,7 @@ TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 5756376686
 
 CHANNELS = {
-    "@superfastsub": "https://t.me/superfastsub",
+    "@superfastsub": "https://t.me/superfastsob",
     "-1003889301236": "https://t.me/+QZ96RdAToi0yMjZk",
     "-1003841395873": "https://t.me/+mDVc97uJ6d40N2Y0"
 }
@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     keyboard = [
-        [InlineKeyboardButton("کانال زیرنویس فوق سریع", url=CHANNELS["@superfastsub"])],
+        [InlineKeyboardButton("کانال زیرنویس فوق سریع", url=CHANNELS["@superfastsob"])],
         [InlineKeyboardButton("کانال دانلود ۱", url=CHANNELS["-1003889301236"])],
         [InlineKeyboardButton("کانال دانلود ۲", url=CHANNELS["-1003841395873"])],
         [InlineKeyboardButton("عضو شدم🙃", callback_data="check")]
