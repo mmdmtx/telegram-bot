@@ -1,4 +1,4 @@
-import os, random, string, logging, redis
+import os, random, string, logging, redis, asyncio
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -6,7 +6,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# اتصال به دیتابیس Redis
+# اتصال به دیتابیس
 redis_url = os.environ.get("REDIS_URL")
 db = redis.from_url(redis_url, decode_responses=True)
 
@@ -21,7 +21,6 @@ def run_flask():
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 5756376686
 
-# --- تنظیمات دقیق کانال‌های شما ---
 CHANNELS = {
     "@superfastsub": "https://t.me/superfastsub",
     "-1003889301236": "https://t.me/+QZ96RdAToi0yMjZk",
@@ -32,42 +31,48 @@ waiting_for_post = False
 
 def generate_key(): return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
 
+# تابع حذف پیام
+async def delete_message_job(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    try:
+        await context.bot.delete_message(chat_id=job.chat_id, message_id=job.data)
+        # ارسال پیام جایگزین
+        await context.bot.send_message(chat_id=job.chat_id, text="Deleted Message")
+    except Exception as e:
+        logging.error(f"Could not delete message: {e}")
+
 async def is_member(bot, user_id):
-    """بررسی عضویت در هر ۳ کانال"""
     for channel_id in CHANNELS.keys():
         try:
             member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
-        except Exception as e:
-            logging.error(f"Error checking {channel_id}: {e}")
-            return False
+        except: return False
     return True
 
-async def send_movie_link(target, key):
+async def send_movie_link(update_or_query, context, key):
+    user_id = update_or_query.from_user.id
     link = db.get(key)
     text = f"مرسی که کانال‌های ما رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{link}\n{link}"
-    if isinstance(target, Update):
-        await target.message.reply_text(text)
-    else: # برای CallbackQuery
-        await target.message.reply_text(text)
+    
+    # ارسال پیام
+    sent_msg = await update_or_query.message.reply_text(text)
+    
+    # اگر کاربر ادمین نبود، پیام رو برای حذف رزرو کن
+    if user_id != ADMIN_ID:
+        context.job_queue.run_once(delete_message_job, 50, data=sent_msg.message_id, chat_id=sent_msg.chat_id)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     key = context.args[0] if context.args else None
     context.user_data["key"] = key
     
-    # اگر عضو بود، مستقیم لینک رو بده
     if await is_member(context.bot, user_id):
         if key and db.exists(key):
-            await send_movie_link(update, key)
-        elif key:
-            await update.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
-        else:
-            await update.message.reply_text("سلام! خوش آمدید. برای دریافت لینک فیلم، باید از لینک‌های مخصوص استفاده کنید.")
+            await send_movie_link(update, context, key)
+        elif key: await update.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
         return
 
-    # اگر عضو نبود، نمایش دکمه‌ها
     keyboard = [
         [InlineKeyboardButton("کانال زیرنویس فوق سریع", url=CHANNELS["@superfastsub"])],
         [InlineKeyboardButton("کانال دانلود ۱", url=CHANNELS["-1003889301236"])],
@@ -81,14 +86,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = query.from_user.id
-    
-    if await is_member(context.bot, user_id):
+    if await is_member(context.bot, query.from_user.id):
         key = context.user_data.get("key")
-        if key and db.exists(key):
-            await send_movie_link(query, key)
-        else:
-            await query.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
+        if key and db.exists(key): await send_movie_link(query, context, key)
+        else: await query.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
     else:
         await query.answer("هنوز در تمام کانال‌ها عضو نشدید! ❌", show_alert=True)
 
@@ -105,7 +106,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.set(key, update.message.text)
         waiting_for_post = False
         bot = await context.bot.get_me()
-        await update.message.reply_text(f"لینک جدید ساخته شد (ذخیره ابدی):\n\nhttps://t.me/{bot.username}?start={key}")
+        await update.message.reply_text(f"لینک جدید ساخته شد:\n\nhttps://t.me/{bot.username}?start={key}")
 
 if __name__ == '__main__':
     Thread(target=run_flask).start()
