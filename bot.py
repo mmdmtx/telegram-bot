@@ -21,8 +21,9 @@ def run_flask():
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 5756376686
 
+# آیدی و لینک کانال‌ها (کانال اصلی آپدیت شد)
 CHANNELS = {
-    "@superfastsub": "https://t.me/superfastsob",
+    "@superfastsob": "https://t.me/superfastsob",
     "-1003889301236": "https://t.me/+QZ96RdAToi0yMjZk",
     "-1003841395873": "https://t.me/+mDVc97uJ6d40N2Y0"
 }
@@ -31,9 +32,9 @@ waiting_for_post = False
 
 def generate_key(): return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
 
-# --- تابع جدید و هوشمند برای حذف پیام با تایمر داخلی پایتون ---
+# تابع حذف پیام
 async def delete_msg_task(bot, chat_id, message_id, delay):
-    await asyncio.sleep(delay) # صبر کردن به مدت ۵۰ ثانیه
+    await asyncio.sleep(delay)
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
         await bot.send_message(chat_id=chat_id, text="Deleted Message")
@@ -47,7 +48,6 @@ async def is_member(bot, user_id):
             if member.status not in ["member", "administrator", "creator"]:
                 return False
         except Exception as e:
-            # اگر ربات در کانالی ادمین نباشد، این ارور در لاگ ثبت می‌شود و فالس برمی‌گردد
             logging.error(f"Bot cannot check {channel_id}: {e}")
             return False 
     return True
@@ -60,7 +60,7 @@ async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, ke
     target = update.callback_query.message if update.callback_query else update.message
     sent_msg = await target.reply_text(text)
 
-    # اگر کاربر ادمین نبود، تسک حذف به صورت یک پردازش جداگانه در بک‌گراند اجرا می‌شود
+    # تایمر ۵۰ ثانیه‌ای برای همه به جز ادمین
     if user_id != ADMIN_ID:
         asyncio.create_task(delete_msg_task(context.bot, sent_msg.chat_id, sent_msg.message_id, 50))
 
