@@ -54,13 +54,11 @@ async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, ke
     link = db.get(key)
     text = f"مرسی که کانال‌های ما رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{link}\n{link}"
     
-    # تشخیص اینکه پیام از دکمه آمده یا استارت
-    if update.callback_query:
-        sent_msg = await update.callback_query.message.reply_text(text)
-    else:
-        sent_msg = await update.message.reply_text(text)
+    # تشخیص ارسال از دکمه یا دستور مستقیم
+    target = update.callback_query.message if update.callback_query else update.message
+    sent_msg = await target.reply_text(text)
 
-    # اگر کاربر ادمین نبود، تایمر حذف فعال شود
+    # اگر کاربر ادمین نبود، ۵۰ ثانیه بعد پیام پاک شود
     if user_id != ADMIN_ID:
         context.job_queue.run_once(delete_after_delay, 50, data=sent_msg.message_id, chat_id=sent_msg.chat_id)
 
@@ -116,6 +114,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     Thread(target=run_flask).start()
-    # تغییر مهم: فعال سازی Job Queue
+    # در اینجا بخش Job Queue به درستی هندل شده است
     app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("new", new))
+    app.add_handler(CallbackQueryHandler(check, pattern="check"))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.run_polling()
