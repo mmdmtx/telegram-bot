@@ -6,7 +6,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# اتصال به دیتابیس Redis
+# اتصال به دیتابیس
 redis_url = os.environ.get("REDIS_URL")
 db = redis.from_url(redis_url, decode_responses=True)
 
@@ -24,23 +24,21 @@ ADMIN_ID = 5756376686
 CHANNELS = {
     "@superfastsub": "https://t.me/superfastsub",
     "-1003889301236": "https://t.me/+QZ96RdAToi0yMjZk",
-    "-1003841395873": "https://t.me/+mDVc97uJ6d40Y2Y0"
+    "-1003841395873": "https://t.me/+mDVc97uJ6d40N2Y0"
 }
 
 waiting_for_post = False
 
 def generate_key(): return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
 
-# --- تابع مخصوص حذف پیام (به صورت مجزا) ---
+# تابع حذف پیام
 async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     try:
-        # حذف پیام اصلی لینک
         await context.bot.delete_message(chat_id=job.chat_id, message_id=job.data)
-        # ارسال متن اطلاع‌رسانی
         await context.bot.send_message(chat_id=job.chat_id, text="Deleted Message")
     except Exception as e:
-        logging.error(f"Error in deleting message: {e}")
+        logging.error(f"Error in deleting: {e}")
 
 async def is_member(bot, user_id):
     for channel_id in CHANNELS.keys():
@@ -51,18 +49,18 @@ async def is_member(bot, user_id):
         except: return False
     return True
 
-async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, is_callback=False):
+async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str):
     user_id = update.effective_user.id
     link = db.get(key)
     text = f"مرسی که کانال‌های ما رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{link}\n{link}"
     
-    # ارسال پیام لینک
-    if is_callback:
+    # تشخیص اینکه پیام از دکمه آمده یا استارت
+    if update.callback_query:
         sent_msg = await update.callback_query.message.reply_text(text)
     else:
         sent_msg = await update.message.reply_text(text)
 
-    # تنظیم تایمر حذف فقط برای غیر ادمین
+    # اگر کاربر ادمین نبود، تایمر حذف فعال شود
     if user_id != ADMIN_ID:
         context.job_queue.run_once(delete_after_delay, 50, data=sent_msg.message_id, chat_id=sent_msg.chat_id)
 
@@ -95,7 +93,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await is_member(context.bot, user_id):
         key = context.user_data.get("key")
         if key and db.exists(key):
-            await send_movie_link(update, context, key, is_callback=True)
+            await send_movie_link(update, context, key)
         else:
             await query.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
     else:
@@ -118,9 +116,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     Thread(target=run_flask).start()
+    # تغییر مهم: فعال سازی Job Queue
     app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("new", new))
-    app.add_handler(CallbackQueryHandler(check, pattern="check"))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.run_polling()
