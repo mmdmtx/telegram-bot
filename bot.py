@@ -21,53 +21,63 @@ def run_flask():
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 5756376686
 
-# --- تنظیمات دقیق کانال‌های شما ---
 CHANNELS = {
     "@superfastsub": "https://t.me/superfastsub",
     "-1003889301236": "https://t.me/+QZ96RdAToi0yMjZk",
-    "-1003841395873": "https://t.me/+mDVc97uJ6d40N2Y0"
+    "-1003841395873": "https://t.me/+mDVc97uJ6d40Y2Y0"
 }
 
 waiting_for_post = False
 
 def generate_key(): return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
 
+# --- تابع مخصوص حذف پیام (به صورت مجزا) ---
+async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    try:
+        # حذف پیام اصلی لینک
+        await context.bot.delete_message(chat_id=job.chat_id, message_id=job.data)
+        # ارسال متن اطلاع‌رسانی
+        await context.bot.send_message(chat_id=job.chat_id, text="Deleted Message")
+    except Exception as e:
+        logging.error(f"Error in deleting message: {e}")
+
 async def is_member(bot, user_id):
-    """بررسی عضویت در هر ۳ کانال"""
     for channel_id in CHANNELS.keys():
         try:
             member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
-        except Exception as e:
-            logging.error(f"Error checking {channel_id}: {e}")
-            return False
+        except: return False
     return True
 
-async def send_movie_link(target, key):
+async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, is_callback=False):
+    user_id = update.effective_user.id
     link = db.get(key)
     text = f"مرسی که کانال‌های ما رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{link}\n{link}"
-    if isinstance(target, Update):
-        await target.message.reply_text(text)
-    else: # برای CallbackQuery
-        await target.message.reply_text(text)
+    
+    # ارسال پیام لینک
+    if is_callback:
+        sent_msg = await update.callback_query.message.reply_text(text)
+    else:
+        sent_msg = await update.message.reply_text(text)
+
+    # تنظیم تایمر حذف فقط برای غیر ادمین
+    if user_id != ADMIN_ID:
+        context.job_queue.run_once(delete_after_delay, 50, data=sent_msg.message_id, chat_id=sent_msg.chat_id)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     key = context.args[0] if context.args else None
     context.user_data["key"] = key
     
-    # اگر عضو بود، مستقیم لینک رو بده
     if await is_member(context.bot, user_id):
         if key and db.exists(key):
-            await send_movie_link(update, key)
+            await send_movie_link(update, context, key)
         elif key:
             await update.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
-        else:
-            await update.message.reply_text("سلام! خوش آمدید. برای دریافت لینک فیلم، باید از لینک‌های مخصوص استفاده کنید.")
         return
 
-    # اگر عضو نبود، نمایش دکمه‌ها
     keyboard = [
         [InlineKeyboardButton("کانال زیرنویس فوق سریع", url=CHANNELS["@superfastsub"])],
         [InlineKeyboardButton("کانال دانلود ۱", url=CHANNELS["-1003889301236"])],
@@ -82,11 +92,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    
     if await is_member(context.bot, user_id):
         key = context.user_data.get("key")
         if key and db.exists(key):
-            await send_movie_link(query, key)
+            await send_movie_link(update, context, key, is_callback=True)
         else:
             await query.message.reply_text("لینک منقضی شده یا وجود ندارد. 😔")
     else:
@@ -105,7 +114,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.set(key, update.message.text)
         waiting_for_post = False
         bot = await context.bot.get_me()
-        await update.message.reply_text(f"لینک جدید ساخته شد (ذخیره ابدی):\n\nhttps://t.me/{bot.username}?start={key}")
+        await update.message.reply_text(f"لینک جدید ساخته شد:\n\nhttps://t.me/{bot.username}?start={key}")
 
 if __name__ == '__main__':
     Thread(target=run_flask).start()
