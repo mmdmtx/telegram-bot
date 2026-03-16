@@ -1,4 +1,4 @@
-import os, random, string, logging, redis
+import os, random, string, logging, redis, asyncio
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -31,12 +31,12 @@ waiting_for_post = False
 
 def generate_key(): return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
 
-# تابع حذف پیام
-async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
+# --- تابع جدید و هوشمند برای حذف پیام با تایمر داخلی پایتون ---
+async def delete_msg_task(bot, chat_id, message_id, delay):
+    await asyncio.sleep(delay) # صبر کردن به مدت ۵۰ ثانیه
     try:
-        await context.bot.delete_message(chat_id=job.chat_id, message_id=job.data)
-        await context.bot.send_message(chat_id=job.chat_id, text="Deleted Message")
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        await bot.send_message(chat_id=chat_id, text="Deleted Message")
     except Exception as e:
         logging.error(f"Error in deleting: {e}")
 
@@ -46,7 +46,10 @@ async def is_member(bot, user_id):
             member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
-        except: return False
+        except Exception as e:
+            # اگر ربات در کانالی ادمین نباشد، این ارور در لاگ ثبت می‌شود و فالس برمی‌گردد
+            logging.error(f"Bot cannot check {channel_id}: {e}")
+            return False 
     return True
 
 async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str):
@@ -54,13 +57,12 @@ async def send_movie_link(update: Update, context: ContextTypes.DEFAULT_TYPE, ke
     link = db.get(key)
     text = f"مرسی که کانال‌های ما رو فالو کردی 😍🫶🏻\n\n\nروی لینک کلیک کن و از فیلم لذت ببر😋💪🏼\n\n{link}\n{link}"
     
-    # تشخیص ارسال از دکمه یا دستور مستقیم
     target = update.callback_query.message if update.callback_query else update.message
     sent_msg = await target.reply_text(text)
 
-    # اگر کاربر ادمین نبود، ۵۰ ثانیه بعد پیام پاک شود
+    # اگر کاربر ادمین نبود، تسک حذف به صورت یک پردازش جداگانه در بک‌گراند اجرا می‌شود
     if user_id != ADMIN_ID:
-        context.job_queue.run_once(delete_after_delay, 50, data=sent_msg.message_id, chat_id=sent_msg.chat_id)
+        asyncio.create_task(delete_msg_task(context.bot, sent_msg.chat_id, sent_msg.message_id, 50))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -114,7 +116,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     Thread(target=run_flask).start()
-    # در اینجا بخش Job Queue به درستی هندل شده است
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("new", new))
