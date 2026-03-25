@@ -24,6 +24,7 @@ ADMIN_ID = 5756376686
 # آیدی و لینک کانال‌ها
 CHANNELS = {
     "@superfastsob": "https://t.me/superfastsob",
+    "@superfastsob1": "https://t.me/superfastsob1",
 }
 
 def generate_key(): return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
@@ -105,6 +106,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("کانال زیرنویس فوق سریع", url=CHANNELS["@superfastsob"])],
+        [InlineKeyboardButton("کانال آرشیو زیرنویس فوق سریع", url=CHANNELS["@superfastsob1"])],
         [InlineKeyboardButton("عضو شدم🙃", callback_data="check")]
     ]
     await update.message.reply_text(
